@@ -1,2 +1,4 @@
-# solfege-bundle-epub-manga
+solfegejs-epub-manga
+====================
+
 Generate Manga in EPUB format

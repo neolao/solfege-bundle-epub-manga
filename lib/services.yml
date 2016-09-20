@@ -1,0 +1,13 @@
+services:
+    # Main service
+    epub_manga:
+        class: "Builder"
+
+
+    # Convert command
+    epub_manga_convert:
+        class: "Command/ConvertCommand"
+        arguments:
+            - "@epub_manga"
+        tags:
+            - { name: "solfege.console.command" }
