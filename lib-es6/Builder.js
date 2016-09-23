@@ -435,7 +435,7 @@ export default class EpubBuilder
             x: Math.round(containerWidth / 2),
             y: Math.round(containerHeight / 2),
             fontSize: 100,
-            anchor: "center baseline",
+            anchor: "center middle",
             attributes: {
                 fill: "#ffffff"
             }
@@ -446,7 +446,7 @@ export default class EpubBuilder
         let textPath = textToSVG.getPath(title, textOptions);
         let textMetrics = textToSVG.getMetrics(title, textOptions);
         if (textMetrics.width < containerWidth - margin) {
-            return `<rect x="${textMetrics.x - 10}" y="${textMetrics.y - 10}" width="${textMetrics.width + 20}" height="${textMetrics.height + 20}" fill="#000000"/>
+            return `<rect x="0" y="${textMetrics.y - 10}" width="${containerWidth}" height="${textMetrics.height + 20}" fill="#000000"/>
                 ${textPath}
             `;
         }
