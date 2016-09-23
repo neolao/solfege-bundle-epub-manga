@@ -21,7 +21,8 @@ export default class EpubBuilder
         width: 1072,
         height: 1448,
         direction: "rtl",
-        author: "EPUB Manga Generator"
+        author: "EPUB Manga Generator",
+        regionMagnification: true
     }
 
     /**
@@ -141,14 +142,16 @@ export default class EpubBuilder
             content += `<!DOCTYPE html>\n`;
             content += `<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">\n`;
             content += `<head>`;
-            content += `<title>${title}</title>`;
+            content += `<title>${index}</title>`;
             content += `<link href="style.css" type="text/css" rel="stylesheet"/>`;
             content += `<meta name="viewport" content="width=${width}, height=${height}"/>`;
             content += `</head>`;
             content += `<body style="background-image: url(images/${imageFileName})">`;
 
-            // Build panel view
-            content += yield this.getImagePanelView(imagePath, width, height);
+            // Build panel view for region magnification
+            if (options.regionMagnification) {
+                content += yield this.getImagePanelView(imagePath, width, height);
+            }
 
             content += `</body>`;
             content += `</html>`;
@@ -173,6 +176,7 @@ export default class EpubBuilder
      */
     *getImagePanelView(imagePath:string, pageWidth:uint32, pageHeight:uint32)
     {
+        let imageFileName = basename(imagePath);
         let imageDimension = getImageDimension(imagePath);
         let imageWidth = imageDimension.width;
         let imageHeight = imageDimension.height;
@@ -180,8 +184,20 @@ export default class EpubBuilder
         let panelViewHeight = Math.floor(pageHeight / 2 - imageHeight / 2) / pageHeight * 100;
 
         let content = `<div id="PV">`;
-        content += `</div>`;
 
+        content += `<div id="PV-L">
+            <a style="display: inline-block; width: 100%; height: 100%" 
+                class="app-amzn-magnify"
+                data-app-amzn-magnify='{"targetId":"PV-L-P", "ordinal": 1}'
+            ></a>
+        </div>`;
+        
+        content += `</div>`;
+            
+        content += `<div class="PV-P" id="PV-L-P" style="background: #ffffff">
+            <img style="position: absolute; left: 0; top: ${panelViewHeight}%" src="images/${imageFileName}" width="${imageWidth}" height="${imageHeight}"/>
+        </div>`;
+        
         return content;
     }
 
@@ -195,11 +211,12 @@ export default class EpubBuilder
     *buildNavFile(filePaths, generatedFilePath:string, title:string)
     {
         let items = "";
-        for (let index in filePaths) {
-            let filePath = filePaths[index];
+        let index = 1;
+        for (let filePath of filePaths) {
             let fileName = basename(filePath);
             let fileTitle = index + 1;
             items += `<li><a href="${fileName}">${fileTitle}</a></li>\n`;
+            index++;
         }
 
         let content = `<?xml version="1.0" encoding="utf-8"?>\n`;
@@ -244,8 +261,8 @@ export default class EpubBuilder
         content += `<head>\n`;
         content += `<meta name="dtb:uid" content="urn:uuid:${uuid}"/>\n`;
         content += `<meta name="dtb:depth" content="1"/>\n`;
-        content += `<meta name="dtb:totalPageCount" content="${pageCount}"/>\n`;
-        content += `<meta name="dtb:maxPageNumber" content="${maxPageNumber}"/>\n`;
+        content += `<meta name="dtb:totalPageCount" content="0"/>\n`;
+        content += `<meta name="dtb:maxPageNumber" content="0"/>\n`;
         content += `<meta name="generated" content="true"/>\n`;
         content += `</head>\n`;
         content += `<docTitle><text>${title}</text></docTitle>\n`;
@@ -283,10 +300,16 @@ export default class EpubBuilder
         let width = options.width;
         let height = options.height;
         let writingMode = "horizontal-rl";
+        let spineDirection = "rtl";
         if (options.direction === "ltr") {
             writingMode = "horizontal-lr";
+            spineDirection = "ltr";
         }
         let orientation = "portrait";
+        let regionMagnification = "false";
+        if (options.regionMagnification) {
+            regionMagnification = "true";
+        }
         let author = options.author;
 
         let content = `<?xml version="1.0" encoding="UTF-8"?>\n`;
@@ -296,13 +319,14 @@ export default class EpubBuilder
         content += `<dc:language>en-US</dc:language>\n`;
         content += `<dc:identifier id="BookID">urn:uuid:${uuid}</dc:identifier>\n`;
         content += `<dc:contributor id="contributor">${author}</dc:contributor>\n`;
+        content += `<dc:creator>${author}</dc:creator>\n`;
         content += `<meta name="cover" content="cover"/>\n`;
         content += `<meta property="rendition:orientation">${orientation}</meta>\n`;
         content += `<meta property="rendition:spread">${orientation}</meta>\n`;
         content += `<meta property="rendition:layout">pre-paginated</meta>\n`;
         content += `<meta name="original-resolution" content="${width}x${height}"/>\n`;
         content += `<meta name="book-type" content="comic"/>\n`;
-        content += `<meta name="RegionMagnification" content="true"/>\n`;
+        content += `<meta name="RegionMagnification" content="${regionMagnification}"/>\n`;
         content += `<meta name="primary-writing-mode" content="${writingMode}"/>\n`;
         content += `<meta name="zero-gutter" content="true"/>\n`;
         content += `<meta name="zero-margin" content="true"/>\n`;
@@ -329,7 +353,7 @@ export default class EpubBuilder
         }
 
         content += `</manifest>`;
-        content += `<spine page-progression-direction="rtl">`;
+        content += `<spine page-progression-direction="${spineDirection}" toc="ncx">`;
 
         for (let index in htmlFilePaths) {
             content += `<itemref idref="page_${index}"/>`;
