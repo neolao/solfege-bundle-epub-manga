@@ -1,7 +1,7 @@
 {
     "name"          : "solfegejs-epub-manga",
     "description"   : "Generate Manga in EPUB format via SolfegeJS",
-    "version"       : "1.0.1",
+    "version"       : "1.0.2",
     "author"        : "neolao <contact@neolao.com>",
     "repository"    : "https://github.com/neolao/solfege-bundle-epub-manga.git",
     "license"       : "MIT",
@@ -19,7 +19,9 @@
         "uuid"                  : "2.0.3",
         "mime"                  : "1.3.4",
         "image-size"            : "0.5.0",
-        "sharp"                 : "0.16.0"
+        "sharp"                 : "0.16.0",
+        "text-to-svg"           : "3.0.1",
+        "svg2png"               : "4.0.0"
     },
     "devDependencies":
     {

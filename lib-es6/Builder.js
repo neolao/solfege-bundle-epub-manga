@@ -8,6 +8,8 @@ import mime from "mime";
 import Zip from "jszip";
 import getImageDimension from "image-size";
 import sharp from "sharp";
+import TextToSVG from "text-to-svg";
+import svg2png from "svg2png";
 
 /**
  * EPUB builder
@@ -60,6 +62,10 @@ export default class EpubBuilder
         // Resize images
         yield this.resizeImages(imageFilePaths, options.width, options.height);
 
+        // Build cover
+        const coverFilePath = `${tempDirectory}/cover.jpg`;
+        yield this.buildCover(imageFilePaths[0], coverFilePath, title);
+
         // Copy stylesheet
         const styleFilePath = `${tempDirectory}/style.css`;
         yield copy(`${__dirname}/epub/style.css`, styleFilePath);
@@ -94,6 +100,7 @@ export default class EpubBuilder
             let fileContent = yield readFile(htmlFilePath);
             archive.file(fileName, fileContent);
         }
+        archive.file("cover.jpg", yield readFile(coverFilePath));
         archive.file("style.css", yield readFile(styleFilePath));
         archive.file("nav.xhtml", yield readFile(navFilePath));
         archive.file("toc.ncx", yield readFile(ncxFilePath));
@@ -289,6 +296,7 @@ export default class EpubBuilder
         content += `<dc:language>en-US</dc:language>\n`;
         content += `<dc:identifier id="BookID">urn:uuid:${uuid}</dc:identifier>\n`;
         content += `<dc:contributor id="contributor">${author}</dc:contributor>\n`;
+        content += `<meta name="cover" content="cover"/>\n`;
         content += `<meta property="rendition:orientation">${orientation}</meta>\n`;
         content += `<meta property="rendition:spread">${orientation}</meta>\n`;
         content += `<meta property="rendition:layout">pre-paginated</meta>\n`;
@@ -303,6 +311,7 @@ export default class EpubBuilder
         content += `</metadata>`;
         content += `<manifest>`;
 
+        content += `<item id="cover" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>\n`;
         content += `<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>\n`;
         content += `<item id="nav" href="nav.xhtml" properties="nav" media-type="application/xhtml+xml"/>\n`;
 
@@ -372,5 +381,104 @@ export default class EpubBuilder
             // Override file
             yield move(tempImagePath, filePath, {clobber: true});
         }
+    }
+
+    /**
+     * Build cover
+     *
+     * @param   {string}    imageFilePath       Source file path
+     * @param   {string}    generatedFilePath   Cover file path
+     * @param   {string}    title               Cover title
+     */
+    *buildCover(imageFilePath:string, generatedFilePath:string, title:?string = null)
+    {
+        let dimension = getImageDimension(imageFilePath);
+        let imageMime = mime.lookup(imageFilePath);
+
+        // Get base64
+        let imageContent = yield readFile(imageFilePath);
+        let buffer = Buffer.from(imageContent);
+        let base64 = buffer.toString("base64");
+
+        // Build title SVG
+        let titleSvg = "";
+        if (typeof title === "string" && title.length > 0) {
+            titleSvg = this.getCoverTitleSvg(title, dimension.width, dimension.height);
+        }
+
+        // Build SVG content
+        let svgContent = `<svg id="example1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${dimension.width}" height="${dimension.height}">
+            <image x="0" y="0" width="${dimension.width}" height="${dimension.height}" xlink:href="data:${imageMime};base64,${base64}"/>
+            ${titleSvg}
+        </svg>`;
+
+        // Generate image
+        let svgBuffer = Buffer.from(svgContent);
+        let pngBuffer = yield svg2png(svgBuffer);
+        let svg = sharp(pngBuffer);
+        yield svg.toFile(generatedFilePath);
+    }
+
+    /**
+     * Get cover title in SVG format
+     * It should be contained in a specific box dimension
+     *
+     * @param   {string}    title               Manga title
+     * @param   {uint32}    containerWidth      Width of the container
+     * @param   {uint32}    containerHeight     Height of the container
+     * @return  {string}                        SVG
+     */
+    getCoverTitleSvg(title:string, containerWidth:uint32, containerHeight:uint32)
+    {
+        const textToSVG = TextToSVG.loadSync();
+        const textOptions = {
+            x: Math.round(containerWidth / 2),
+            y: Math.round(containerHeight / 2),
+            fontSize: 100,
+            anchor: "center baseline",
+            attributes: {
+                fill: "#ffffff"
+            }
+        };
+
+        // Build the text path in one line
+        let margin = 100;
+        let textPath = textToSVG.getPath(title, textOptions);
+        let textMetrics = textToSVG.getMetrics(title, textOptions);
+        if (textMetrics.width < containerWidth - margin) {
+            return `<rect x="${textMetrics.x - 10}" y="${textMetrics.y - 10}" width="${textMetrics.width + 20}" height="${textMetrics.height + 20}" fill="#000000"/>
+                ${textPath}
+            `;
+        }
+
+        // The text is too long
+        // We have to split it in several lines
+        let lineHeight = textMetrics.height;
+        let lineCount = Math.ceil(textMetrics.width / (containerWidth - margin));
+        let linesHeight = lineHeight * lineCount;
+        let words = title.split(" ");
+        let wordCount = words.length;
+        let wordPerLine = Math.ceil(wordCount / lineCount);
+        let lines = [];
+        for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+            let start = lineIndex * wordPerLine;
+            let end = start + wordPerLine;
+            let line = words.slice(start, end);
+            lines.push(line.join(" "));
+        }
+
+        let svg = "";
+        for(let lineIndex in lines) {
+            let line = lines[lineIndex];
+            let lineOptions = Object.assign({}, textOptions, {
+                y: Math.round(containerHeight / 2 - linesHeight / 2 + lineHeight) + lineIndex * lineHeight
+            });
+            let linePath = textToSVG.getPath(line, lineOptions);
+            let lineMetrics = textToSVG.getMetrics(line, lineOptions);
+            svg += `<rect x="0" y="${lineMetrics.y - 10}" width="${containerWidth}" height="${lineMetrics.height + 20}" fill="#000000"/>`;
+            svg += linePath;
+        }
+
+        return svg;
     }
 }
